@@ -1,0 +1,5 @@
+outs:
+- md5: ec6ece97fca31bdc04789cd55ae0d4f9
+  size: 862594120
+  hash: md5
+  path: dane.parquet
