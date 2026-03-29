@@ -1,3 +1,6 @@
 venv/
 *.csv
 *.parquet
+*.shp
+*.shx
+*.dbf
