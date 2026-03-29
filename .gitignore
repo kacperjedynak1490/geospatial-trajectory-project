@@ -1,0 +1,4 @@
+venv/
+.dvc
+*.csv
+*.parquet
