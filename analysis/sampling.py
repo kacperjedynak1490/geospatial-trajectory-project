@@ -21,4 +21,4 @@ data = pd.read_parquet("./dane.parquet")
 for key, item in samples.items():
     data_sampled = data.sample(item, random_state=42)
     data_sampled.to_parquet(f"./data_samples/data_{key}_raw.parquet", index=False)
-    data_sampled.to_csv(f"./data_samples/data_{key}_raw.csv", index=False)
+    #data_sampled.to_csv(f"./data_samples/data_{key}_raw.csv", index=False)
