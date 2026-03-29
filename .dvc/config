@@ -1,4 +1,10 @@
 [core]
-    remote = gdrive_remote
+    remote = dagshub_s3
+    autostage = true
 ['remote "gdrive_remote"']
     url = gdrive://1CzRnBBOUqF36gETixte2tY4a9j4wfgEW
+['remote "origin"']
+    url = https://dagshub.com/kacperjedynak1490/geospatial-trajectory-project.dvc
+['remote "dagshub_s3"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/kacperjedynak1490/geospatial-trajectory-project.s3
