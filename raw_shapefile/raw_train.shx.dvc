@@ -1,0 +1,5 @@
+outs:
+- md5: da983d75f244ee1a74a274e24bb8382a
+  size: 90112
+  hash: md5
+  path: raw_train.shx

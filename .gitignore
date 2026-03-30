@@ -2,3 +2,6 @@ venv/
 *.csv
 *.parquet
 /data_samples
+*.shp
+*.shx
+*.dbf
