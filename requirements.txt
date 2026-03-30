@@ -2,3 +2,8 @@ pandas
 pyarrow
 pyshp
 dvc[s3]
+psycopg2
+openmeteo_requests
+requests_cache
+retry-requests 
+numpy

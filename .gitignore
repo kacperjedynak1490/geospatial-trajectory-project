@@ -4,3 +4,4 @@ venv/
 *.shp
 *.shx
 *.dbf
+.env
