@@ -1,3 +1,4 @@
 pandas
 pyarrow
 dvc[s3]
+scikit-learn
