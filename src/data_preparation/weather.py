@@ -4,6 +4,15 @@ At this moment it makes only request to API for Porto for historic date 01/07/20
 to 30/06/2014.
 This code is copied from oficial Open Meteo website with some modifications.
 I split date to year, month, day, hour and timezone and add most important columns.
+
+Explanation of columns:
+- precipitation: Precipitation in mm (rain + snow + sleet)
+- rain: Rain in mm
+- wind_gusts_10m: Wind gusts at 10m in km/h
+- is_day: Boolean indicating if it's day time
+- weather_code: Numerical code representing weather conditions
+- temperature_2m: Temperature at 2m in °C
+- relative_humidity_2m: Relative humidity at 2m in %
 '''
 import openmeteo_requests
 import pandas as pd
