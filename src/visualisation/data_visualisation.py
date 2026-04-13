@@ -83,13 +83,17 @@ def visualize_boxplots(df):
     plt.show()
 
 def visualize_dependences(df, log=True):
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     axes[0].scatter(df['ACTUAL_DIST_KM'],df['TRIP_TIME_MIN'], alpha=0.5)
     axes[0].set_xlabel('ACTUAL_DIST_KM')
     axes[0].set_ylabel('TRIP_TIME_MIN')
-    if log:
-        axes[0].set_xscale('log')
     axes[0].set_title('TRIP_TIME_MIN vs ACTUAL_DIST_KM')
+    
+    axes[1].scatter(df['ACTUAL_DIST_KM'],df['TRIP_TIME_MIN'], alpha=0.5)
+    axes[1].set_xlabel('ACTUAL_DIST_KM')
+    axes[1].set_ylabel('TRIP_TIME_MIN')
+    axes[1].set_xscale('log')
+    axes[1].set_title('TRIP_TIME_MIN vs ACTUAL_DIST_KM')
 
     #this was messy, now better version
     # dates = pd.to_datetime(df[["YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND"]].rename(columns=str.lower))
@@ -99,12 +103,13 @@ def visualize_dependences(df, log=True):
     grouped_months = df.groupby(['YEAR', 'MONTH']).size()
     positions = range(len(grouped_months))
     labels = [f"{year}-{month:02d}" for year, month in grouped_months.index]
-    axes[1].bar(positions, grouped_months.values, color='purple')
-    axes[1].set_xticks(positions)
-    axes[1].set_xticklabels(labels, rotation=90, ha='right')
-    axes[1].set_xlabel('TIME')
-    axes[1].set_ylabel('COUNT')
-    axes[1].set_title('Number of Trips per Month')
+    axes[2].bar(positions, grouped_months.values, color='purple')
+    axes[2].set_xticks(positions)
+    axes[2].set_xticklabels(labels, rotation=90, ha='right')
+    axes[2].set_xlabel('TIME')
+    axes[2].set_ylabel('COUNT')
+    axes[2].set_title('Number of Trips per Month')
+    plt.subplots_adjust(wspace=0.7)
     plt.show()
 
 def visualize_barplots(df):
@@ -200,8 +205,6 @@ here are the calls
 i double chcecked for different df if there are differences but apart from mapping i dont think they are significant
 '''
 
-#weather_visu()
-#print(weather_data[['precipitation','rain','wind_gusts_10m','weather_code','temperature_2m','relative_humidity_2m']].describe())
 #print(taxi_10k_proc.columns)
 #print(taxi_10k_proc[['TRIP_TIME_MIN','ACTUAL_DIST_KM','OPTIMAL_DIST_KM','DEVIATION_RATIO']].describe())
 
@@ -217,3 +220,6 @@ i double chcecked for different df if there are differences but apart from mappi
 
 #visualize_barplots(taxi_10k_proc)
 #visualize_barplots(df_end)
+
+#print(weather_data[['precipitation','rain','wind_gusts_10m','weather_code','temperature_2m','relative_humidity_2m']].describe())
+#weather_visu()
