@@ -11,3 +11,7 @@ geopandas
 shapely
 contextily
 osmnx
+xgboost
+scikit-learn
+shap
+matplotlib
