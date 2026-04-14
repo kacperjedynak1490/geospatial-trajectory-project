@@ -66,7 +66,7 @@ def shapefileConversion(filename_full:str, locationdata:Location, data:Available
     raise FileTypeError("filetype has to be either csv or parquet")
   
   # DONT ADD EXTENSION TO THE NAME, IT HAS TO BE ADDED AUTOMATICALLY
-  data_shp = shapefile.Writer(f"raw_shapefile/{filename}", shapeType=locationtype)
+  data_shp = shapefile.Writer(f"data/raw/raw_shapefile{filename}", shapeType=locationtype)
   '''Starting shapfile creation
   POLYLINE is line
   POINT is single geo-point'''
@@ -118,7 +118,7 @@ def shapefileConversion(filename_full:str, locationdata:Location, data:Available
   data_shp.close()
 
   # path has to be the same as shp file but with extension this time
-  prj_path = rf"raw_shapefile/{filename}.prj"
+  prj_path = rf"data/raw/raw_shapefile/{filename}.prj"
   # it fits this shp but not all
   wgs84_wkt = 'GEOGCS["GCS_WGS_1984",DATUM["D_WGS_1984",SPHEROID["WGS_1984",6378137.0,298.257223563]],PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]]'
   #just saves to file
@@ -126,4 +126,6 @@ def shapefileConversion(filename_full:str, locationdata:Location, data:Available
     prj_file.write(wgs84_wkt)
   return
 
-shapefileConversion("dane.parquet", "POLYLINE",AvailableData.TAXI)
+# don't know if to just keep it as a module or manually call functions here
+#shapefileConversion("dane.parquet", "POLYLINE",AvailableData.TAXI)
+shapefileConversion("signs.csv", "POINT",AvailableData.SIGNS)
