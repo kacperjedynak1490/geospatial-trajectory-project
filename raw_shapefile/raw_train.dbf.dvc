@@ -1,0 +1,5 @@
+outs:
+- md5: 8154e122a0ef014a508ba148833c63e1
+  size: 4138350
+  hash: md5
+  path: raw_train.dbf

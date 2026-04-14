@@ -1,3 +1,4 @@
 pandas
 pyarrow
+pyshp
 dvc[s3]

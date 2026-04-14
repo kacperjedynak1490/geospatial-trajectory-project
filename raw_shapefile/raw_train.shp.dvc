@@ -1,0 +1,5 @@
+outs:
+- md5: 0c971a4ddab46f8ac7f344bbfbef6745
+  size: 9800796
+  hash: md5
+  path: raw_train.shp
