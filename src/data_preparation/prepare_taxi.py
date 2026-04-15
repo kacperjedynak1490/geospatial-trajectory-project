@@ -22,11 +22,11 @@ import numpy as np
 #data
 
 # --- CONFIGURATION -------------------
-DEBUG_MODE = True  # False for full dataset, True for sample dataset  
+DEBUG_MODE = False  # False for full dataset, True for sample dataset  
 
 if DEBUG_MODE:
-    file_path = 'data/data_samples/data_10k_raw.parquet'
-    output_path = 'data/data_samples/taxi_10k_prepared.parquet'
+    file_path = 'data/data_samples/data_100k_raw.parquet'
+    output_path = 'data/data_samples/taxi_100k_prepared.parquet'
 else:
     file_path = 'data/raw/dane.parquet'
     output_path = 'data/processed/taxi_prepared.parquet'
