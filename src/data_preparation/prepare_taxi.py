@@ -22,7 +22,7 @@ import numpy as np
 #data
 
 # --- CONFIGURATION -------------------
-DEBUG_MODE = False  # False for full dataset, True for sample dataset  
+DEBUG_MODE = True  # False for full dataset, True for sample dataset  
 
 if DEBUG_MODE:
     file_path = 'data/data_samples/data_100k_raw.parquet'
