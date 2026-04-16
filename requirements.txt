@@ -11,3 +11,4 @@ geopandas
 shapely
 contextily
 osmnx
+h3==4.4.2
