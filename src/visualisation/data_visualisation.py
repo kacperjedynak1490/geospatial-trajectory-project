@@ -11,7 +11,7 @@ taxi_10k = pd.read_parquet('data/data_samples/data_10k_raw.parquet')
 taxi_100k = pd.read_parquet('data/data_samples/data_100k_raw.parquet')
 porto_gdf = ox.geocode_to_gdf("Porto, Portugal")
 weather_data = pd.read_parquet('data/raw/weather/hourly_weather.parquet')
-taxi_10k_proc = pd.read_parquet('data/data_samples/taxi_10k_prepared.parquet')
+taxi_100k_proc = pd.read_parquet('data/data_samples/taxi_100k_prepared.parquet')
 
 # print(taxi_10k.head())
 # print(taxi_100k.head())
@@ -24,8 +24,6 @@ def creating_geometry(column):
     coords = json.loads(column)        
     if len(coords) >= 2:
         return LineString(coords)
-    elif len(coords) == 1:
-        return Point(coords[0])
     else:
         return None       
 
@@ -57,18 +55,18 @@ def visualize_taxi_raw():
 #print(taxi_10k_proc.head())
 #print(taxi_10k_proc.columns)
 
-taxi_10k_proc_geo_start = gpd.GeoDataFrame(taxi_10k_proc, geometry=gpd.points_from_xy(taxi_10k_proc['START_LON'], taxi_10k_proc['START_LAT']))
-taxi_10k_proc_geo_end = gpd.GeoDataFrame(taxi_10k_proc, geometry=gpd.points_from_xy(taxi_10k_proc['END_LON'], taxi_10k_proc['END_LAT']))
+taxi_100k_proc_geo_start = gpd.GeoDataFrame(taxi_100k_proc, geometry=gpd.points_from_xy(taxi_100k_proc['START_LON'], taxi_100k_proc['START_LAT']))
+taxi_100k_proc_geo_end = gpd.GeoDataFrame(taxi_100k_proc, geometry=gpd.points_from_xy(taxi_100k_proc['END_LON'], taxi_100k_proc['END_LAT']))
 
-taxi_10k_proc_geo_start = taxi_10k_proc_geo_start.set_crs("EPSG:4326")
-taxi_10k_proc_geo_end = taxi_10k_proc_geo_end.set_crs("EPSG:4326")
+taxi_100k_proc_geo_start = taxi_100k_proc_geo_start.set_crs("EPSG:4326")
+taxi_100k_proc_geo_end = taxi_100k_proc_geo_end.set_crs("EPSG:4326")
 
 '''
 beacuse there can only be one geometry in geodataframe i separated for start point and endpoint
 ideally we first filter by within porto then we dont really need geometry that much
 '''
-df_start = gpd.sjoin(taxi_10k_proc_geo_start, porto_gdf, predicate='within')
-df_end = gpd.sjoin(taxi_10k_proc_geo_end, porto_gdf, predicate='within')
+df_start = gpd.sjoin(taxi_100k_proc_geo_start, porto_gdf, predicate='within')
+df_end = gpd.sjoin(taxi_100k_proc_geo_end, porto_gdf, predicate='within')
 
 '''
 function titles can vary because they're pretty random
