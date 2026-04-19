@@ -5,13 +5,15 @@ import json
 from shapely.geometry import LineString, Point
 import contextily
 import osmnx as ox
+import folium
 
 #reading files do dataframes
 taxi_10k = pd.read_parquet('data/data_samples/data_10k_raw.parquet')
 taxi_100k = pd.read_parquet('data/data_samples/data_100k_raw.parquet')
 porto_gdf = ox.geocode_to_gdf("Porto, Portugal")
 weather_data = pd.read_parquet('data/raw/weather/hourly_weather.parquet')
-taxi_100k_proc = pd.read_parquet('data/data_samples/taxi_100k_prepared.parquet')
+taxi_10k_proc = pd.read_parquet('data/data_samples/taxi_10k_prepared.parquet')
+test_data = gpd.read_file('data/data_samples/taxi_10k_prepared.geojson')
 
 # print(taxi_10k.head())
 # print(taxi_100k.head())
@@ -55,18 +57,18 @@ def visualize_taxi_raw():
 #print(taxi_10k_proc.head())
 #print(taxi_10k_proc.columns)
 
-taxi_100k_proc_geo_start = gpd.GeoDataFrame(taxi_100k_proc, geometry=gpd.points_from_xy(taxi_100k_proc['START_LON'], taxi_100k_proc['START_LAT']))
-taxi_100k_proc_geo_end = gpd.GeoDataFrame(taxi_100k_proc, geometry=gpd.points_from_xy(taxi_100k_proc['END_LON'], taxi_100k_proc['END_LAT']))
+# taxi_100k_proc_geo_start = gpd.GeoDataFrame(taxi_100k_proc, geometry=gpd.points_from_xy(taxi_100k_proc['START_LON'], taxi_100k_proc['START_LAT']))
+# taxi_100k_proc_geo_end = gpd.GeoDataFrame(taxi_100k_proc, geometry=gpd.points_from_xy(taxi_100k_proc['END_LON'], taxi_100k_proc['END_LAT']))
 
-taxi_100k_proc_geo_start = taxi_100k_proc_geo_start.set_crs("EPSG:4326")
-taxi_100k_proc_geo_end = taxi_100k_proc_geo_end.set_crs("EPSG:4326")
+# taxi_100k_proc_geo_start = taxi_100k_proc_geo_start.set_crs("EPSG:4326")
+# taxi_100k_proc_geo_end = taxi_100k_proc_geo_end.set_crs("EPSG:4326")
 
 '''
 beacuse there can only be one geometry in geodataframe i separated for start point and endpoint
 ideally we first filter by within porto then we dont really need geometry that much
 '''
-df_start = gpd.sjoin(taxi_100k_proc_geo_start, porto_gdf, predicate='within')
-df_end = gpd.sjoin(taxi_100k_proc_geo_end, porto_gdf, predicate='within')
+# df_start = gpd.sjoin(taxi_100k_proc_geo_start, porto_gdf, predicate='within')
+# df_end = gpd.sjoin(taxi_100k_proc_geo_end, porto_gdf, predicate='within')
 
 '''
 function titles can vary because they're pretty random
@@ -198,11 +200,35 @@ def weather_visu():
     plt.subplots_adjust(hspace=1.2, wspace=0.3)
     plt.show()
     
+def visualizing(df, porto_gdf):
+    # Get a single centroid for the map center
+    center_point = porto_gdf.geometry.centroid.iloc[0]  # Take the first centroid
+    m = folium.Map(location=[center_point.y, center_point.x], zoom_start=12, tiles='CartoDB positron')
+    porto_clean = porto_gdf[['geometry']].reset_index(drop=True)
+    df_clean = df[['geometry']].reset_index(drop=True)
+    
+    # ZMIANA 2: Zamiast .to_json() używamy magicznego parametru __geo_interface__
+    # Zwraca on czysty słownik Pythona zamiast problematycznego stringa tekstu. 
+    # Folium uwielbia ten format i radzi sobie z nim bez zająknięcia!
+    folium.GeoJson(porto_clean.__geo_interface__).add_to(m)
+    folium.GeoJson(df_clean.__geo_interface__).add_to(m)
+    m.save("data/maps/taxi_map.html")
+    
+def areas_chopped_visu():
+    fig, ax = plt.subplots(figsize=(10, 10))
+    gpd.read_file('data/data_samples/taxi_10k_prepared.geojson').plot(column='AREA_ID', cmap='Paired', legend=True,ax=ax,
+                                                                  legend_kwds={
+            'ncol': 6,
+            'loc': 'upper center',
+            'bbox_to_anchor': (0.5, -0.05), 
+            'title': 'Tytuł Twojej Legendy',
+            'fontsize': 3
+        })
+    plt.show()
 '''
 here are the calls
 i double chcecked for different df if there are differences but apart from mapping i dont think they are significant
 '''
-
 #print(taxi_10k_proc.columns)
 #print(taxi_10k_proc[['TRIP_TIME_MIN','ACTUAL_DIST_KM','OPTIMAL_DIST_KM','DEVIATION_RATIO']].describe())
 
@@ -221,3 +247,7 @@ i double chcecked for different df if there are differences but apart from mappi
 
 #print(weather_data[['precipitation','rain','wind_gusts_10m','weather_code','temperature_2m','relative_humidity_2m']].describe())
 #weather_visu()
+
+# PT 2
+#visualizing(test_data, porto_gdf)
+#areas_chopped_visu()

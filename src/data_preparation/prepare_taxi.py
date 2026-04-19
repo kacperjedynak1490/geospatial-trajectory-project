@@ -22,16 +22,18 @@ from shapely.geometry import Point, LineString
 import shapely.wkt
 from src.visualisation.data_visualisation import creating_geometry
 import osmnx as ox
-import folium
 
 #data
 
 # --- CONFIGURATION -------------------
 DEBUG_MODE = True  # False for full dataset, True for sample dataset  
-
+SAVE_MY_COMPUTER = True # :)
 if DEBUG_MODE:
     file_path = 'data/data_samples/data_100k_raw.parquet'
     output_path = 'data/data_samples/taxi_100k_prepared.parquet'
+if SAVE_MY_COMPUTER:
+    file_path = 'data/data_samples/data_10k_raw.parquet'
+    output_path = 'data/data_samples/taxi_10k_prepared.parquet'
 else:
     file_path = 'data/raw/dane.parquet'
     output_path = 'data/processed/taxi_prepared.parquet'
@@ -40,16 +42,16 @@ else:
 df = pd.read_parquet(file_path)
 
 geo_taxi = gpd.GeoDataFrame(df, geometry=df['POLYLINE'].apply(creating_geometry), crs='EPSG:4326')
+geo_taxi['original_geometry'] = geo_taxi.geometry.copy()
 porto_gdf = ox.geocode_to_gdf("Porto, Portugal")
 geo_taxi = gpd.sjoin(geo_taxi, porto_gdf, predicate='within')
 porto_areas = pd.read_parquet('data/processed/area.parquet')
 porto_areas_gdf = gpd.GeoDataFrame(porto_areas, geometry=porto_areas['POLYGON'].apply(lambda wkt: shapely.wkt.loads(wkt)), crs='EPSG:4326')
 porto_areas_gdf = porto_areas_gdf.drop(columns=['POLYGON'])
-
 df = gpd.overlay(geo_taxi, porto_areas_gdf, how='intersection')
 #print(df.head())
 
-
+print("test")
 #delete MISSING_DATA, MISSING_DATA column contains boolean values (False/True)
 df = df[df['MISSING_DATA'] == False].copy() 
 # change from A, B, C to 1, 2, 3 for CALL_TYPE
@@ -76,6 +78,39 @@ def trip_time(geom):
 
 df['TIME_IN_AREA'] = df['geometry'].apply(trip_time)
 
+def start_in_area_time(row):
+    orig_geom = row['original_geometry']
+    inter_geom = row['geometry']
+    
+    if orig_geom is None or inter_geom is None or inter_geom.is_empty: #chceck for empty geometry
+        return 0
+    
+    if inter_geom.geom_type == 'MultiLineString': #deelcting only the first point in geometry
+        start_coord = inter_geom.geoms[0].coords[0]
+    elif inter_geom.geom_type == 'LineString':
+        start_coord = inter_geom.coords[0] # dont know if this is correct, probably not
+    else:
+        return 0
+        
+    start_pt = Point(start_coord)
+    orig_coords = list(orig_geom.coords)
+    
+    for i in range(len(orig_coords) - 1): # searching for the point in the list
+        segment = LineString([orig_coords[i], orig_coords[i+1]])
+        if segment.distance(start_pt) < 1e-6:
+            seconds = i * 15
+            if segment.length == 0:
+                segment_fraction = 0
+            else:
+                segment_fraction = segment.project(start_pt) / segment.length
+            sekundy_dodatkowe = segment_fraction * 15
+            return seconds + sekundy_dodatkowe
+    return 0
+
+df['SECONDS_TO_ADD'] = df.apply(start_in_area_time, axis=1)
+print("test")
+# Magiczne dodanie wyliczonych sekund do oryginalnego TIMESTAMP
+df['TIMESTAMP'] = df['TIMESTAMP'] + df['SECONDS_TO_ADD']
 #TIMESTAMP
 df['DATETIME'] = pd.to_datetime(df['TIMESTAMP'], unit='s')
 
@@ -109,13 +144,14 @@ def parse_polyline(polyline_str):
     except:
         return []
 
-df['POLYLINE_LIST'] = df.geometry.apply(parse_polyline)
+# parse the original POLYLINE string data, not the shapely geometry # NO LONGER USED
+# df['POLYLINE_LIST'] = df.geometry.apply(parse_polyline)
 
 # extract START and END coordinates
-df['START_LON'] = df['POLYLINE_LIST'].apply(lambda x: x[0][0] if len(x) > 0 else None)
-df['START_LAT'] = df['POLYLINE_LIST'].apply(lambda x: x[0][1] if len(x) > 0 else None)
-df['END_LON'] = df['POLYLINE_LIST'].apply(lambda x: x[-1][0] if len(x) > 0 else None)
-df['END_LAT'] = df['POLYLINE_LIST'].apply(lambda x: x[-1][1] if len(x) > 0 else None)
+# df['START_LON'] = df['POLYLINE_LIST'].apply(lambda x: x[0][0] if len(x) > 0 else None)
+# df['START_LAT'] = df['POLYLINE_LIST'].apply(lambda x: x[0][1] if len(x) > 0 else None)
+# df['END_LON'] = df['POLYLINE_LIST'].apply(lambda x: x[-1][0] if len(x) > 0 else None)
+# df['END_LAT'] = df['POLYLINE_LIST'].apply(lambda x: x[-1][1] if len(x) > 0 else None)
 def get_coords(geom):
     if geom is None or geom.is_empty or geom.geom_type != 'LineString':
         return None, None, None, None
@@ -128,7 +164,7 @@ def get_coords(geom):
 df['START_LON'], df['START_LAT'], df['END_LON'], df['END_LAT'] = zip(*df['geometry'].apply(get_coords))
 
 # distances (haversine  in km)
-def calculate_actual_distance(polyline):
+def calculate_actual_distance(polyline): # NO LONGER USED
     if not polyline or len(polyline) < 2:
         return 0.0
     total_dist = 0.0
@@ -148,7 +184,7 @@ def calculate_actual_distance(polyline):
     return total_dist
 
 # vectorized haversine for OPTIMAL_DIST_KM (for large datasets)
-def vectorized_haversine(lon1, lat1, lon2, lat2):
+def vectorized_haversine(lon1, lat1, lon2, lat2): # NO LONGER USED
     if np.any(pd.isnull([lon1, lat1, lon2, lat2])):
         return np.nan
     R = 6371.0
@@ -161,14 +197,14 @@ def vectorized_haversine(lon1, lat1, lon2, lat2):
 
 #df['DIST_KM_IN_AREA'] = df['POLYLINE_LIST'].apply(calculate_actual_distance)
 df.to_crs(epsg=3857, inplace=True)  # project to metric CRS for accurate distance calculation
-df['DIST_KM_IN_AREA'] = df.geometry.length / 10**6 # approximate conversion from degrees to km at the equator
-start_points = gpd.GeoSeries.from_xy(df['START_LON'], df['START_LAT'], crs="EPSG:3857")
-end_points = gpd.GeoSeries.from_xy(df['END_LON'], df['END_LAT'], crs="EPSG:3857")
-df['OPTIMAL_DIST_KM'] = start_points.distance(end_points) / 1000
-#vectorized_haversine(df['START_LON'], df['START_LAT'], df['END_LON'], df['END_LAT'])
+df['DIST_KM_IN_AREA'] = df.geometry.length / 10**3
+start_points = gpd.GeoSeries.from_xy(df['START_LON'], df['START_LAT'], crs="EPSG:4326")
+end_points = gpd.GeoSeries.from_xy(df['END_LON'], df['END_LAT'], crs="EPSG:4326")
+df['OPTIMAL_DIST_KM'] = start_points.to_crs(epsg=3857).distance(end_points.to_crs(epsg=3857)) / 10**3
+
 df.to_crs(epsg=4326, inplace=True)
-
-
+print("test")
+#df['OPTIMAL_DIST_KM'] = vectorized_haversine(df['START_LON'], df['START_LAT'], df['END_LON'], df['END_LAT'])
 # 6. Deviation Ratio
 # np.where handles the division by zero natively and cleanly
 df['DEVIATION_RATIO'] = np.where(
@@ -180,28 +216,25 @@ df['SPEED'] = np.where(df['TIME_IN_AREA'] > 0, df['DIST_KM_IN_AREA'] / (df['TIME
 # check   
 print(df[['TRIP_ID', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'PARTDAY', 'TIME_IN_AREA']].head())
 print(df[['TRIP_ID', 'DIST_KM_IN_AREA', 'DEVIATION_RATIO', 'OPTIMAL_DIST_KM', 'geometry']].head())
-print(df[['TRIP_ID', 'START_LON', 'START_LAT', 'END_LON', 'END_LAT','POLYLINE_LIST','SPEED']].head())
+print(df[['TRIP_ID', 'START_LON', 'START_LAT', 'END_LON', 'END_LAT','SPEED','SECONDS_TO_ADD']].head())
 print(type(df['geometry']))
-#saving prepared data
-def visualizing():
-    porto_gdf.to_crs(epsg=3857, inplace=True)    
-    center_point = porto_gdf.geometry.centroid.iloc[0]
-    porto_gdf.to_crs(epsg=4326, inplace=True)
-    m = folium.Map(location=[center_point.y, center_point.x], zoom_start=12, tiles='CartoDB positron')
-    folium.Choropleth(porto_gdf.geometry,columns=['AREA_ID']).add_to(m)
-    folium.Choropleth(df.geometry.head(100),columns=['AREA_ID']).add_to(m)
-    m.save("data/maps/taxi_map.html")
+
 
 columns_to_drop = ['CALL_TYPE', 'ORIGIN_CALL','ORIGIN_STAND','TAXI_ID','TIMESTAMP','DAY_TYPE','MISSING_DATA','POLYLINE','DATETIME','START_LON', 'START_LAT', 'END_LON', 'END_LAT',
-                   'OPTIMAL_DIST_KM','POLYLINE_LIST', 'DATETIME']
+                   'OPTIMAL_DIST_KM', 'DATETIME','SECONDS_TO_ADD','original_geometry']
 #TRIP_ID(int), YEAR(int), MONTH(int), DAY(int), HOUR(int), MINUTE(int), TIMEZONE(string),SECOND(int), WEEKDAY(int),
 # PARTDAY(int), POLYLINE(xd nie wiem jaki typ object?), TIME_IN_AREA(int), DIST_KM_IN_AREA(float), DEVIATION_RATIO(float),
 # AREA_ID(int),SPEED(float);
 df_final = df.drop(columns=columns_to_drop, errors='ignore')
-visualizing()
+df_norm = df_final[['TRIP_ID', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND', 'WEEKDAY',
+                    'PARTDAY', 'geometry', 'TIME_IN_AREA', 'DIST_KM_IN_AREA', 'DEVIATION_RATIO',
+                    'AREA_ID', 'SPEED']]
+print(df_norm.columns)
+print(df_norm.head(20))
+#saving prepared data
 df_final.to_file(output_path.replace('.parquet', '.geojson'), driver='GeoJSON')
-df_final.to_parquet(output_path)
+df_norm.to_parquet(output_path)
 
 #csv
 #output_path_csv = 'data/data_samples/taxi_10k_prepared.csv'
-#df_final.to_csv(output_path_csv, index=False)
+#df_norm.to_csv(output_path_csv, index=False)
