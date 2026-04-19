@@ -6,3 +6,4 @@ venv/
 *.dbf
 *.geojson
 .env
+src/visualisation/__pycache__/

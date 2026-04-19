@@ -26,12 +26,11 @@ import osmnx as ox
 #data
 
 # --- CONFIGURATION -------------------
-DEBUG_MODE = True  # False for full dataset, True for sample dataset  
-SAVE_MY_COMPUTER = True # :)
-if DEBUG_MODE:
+DEBUG_MODE = 1  # False for full dataset, True for sample dataset  
+if (DEBUG_MODE == 1):
     file_path = 'data/data_samples/data_100k_raw.parquet'
     output_path = 'data/data_samples/taxi_100k_prepared.parquet'
-if SAVE_MY_COMPUTER:
+elif (DEBUG_MODE == 2):
     file_path = 'data/data_samples/data_10k_raw.parquet'
     output_path = 'data/data_samples/taxi_10k_prepared.parquet'
 else:
