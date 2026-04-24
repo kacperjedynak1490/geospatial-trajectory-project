@@ -24,7 +24,7 @@ import osmnx as ox
 #data
 
 # --- CONFIGURATION -------------------
-DEBUG_MODE = 2  # False for full dataset, True for sample dataset  
+DEBUG_MODE = 0 # 0 - full dataset, 1 - 100k rows, 2 - 10k rows
 if (DEBUG_MODE == 1):
     file_path = 'data/data_samples/data_100k_raw.parquet'
     output_path = 'data/data_samples/taxi_100k_prepared.parquet'
@@ -38,7 +38,9 @@ else:
 
 print("Loading data...")
 df = pd.read_parquet(file_path)
+df.drop(columns=['CALL_TYPE', 'ORIGIN_CALL', 'ORIGIN_STAND', 'TAXI_ID'], inplace=True) 
 geo_taxi = gpd.GeoDataFrame(df, geometry=df['POLYLINE'].apply(creating_geometry), crs='EPSG:4326')
+df.drop(columns=['POLYLINE'], inplace=True)
 geo_taxi['original_geometry'] = geo_taxi.geometry.copy()
 porto_gdf = ox.geocode_to_gdf("Porto, Portugal")
 porto_areas = pd.read_parquet('data/processed/area.parquet')
@@ -61,17 +63,15 @@ df['geometry'] = df['geometry'].apply(multilinestring_to_linestring)
 # remove trips with very short geometry (probably errors)
 def count_coords(geom):
     if geom is None or geom.is_empty:
-        return 0
+        return False
     elif geom.geom_type == 'LineString':
-        return len(geom.coords)
+        return len(geom.coords) > 2
     else:
-        return 0
-df = df[df['geometry'].apply(count_coords) > 2].copy()
+        return False
+df = df[df['geometry'].apply(count_coords)]
 df = df.reset_index(drop=True)
 print(df.geometry.head(100))
 print("Column manipulation...")
-# change from A, B, C to 1, 2, 3 for CALL_TYPE
-df['CALL_TYPE'] = df['CALL_TYPE'].map({'A': 1, 'B': 2, 'C': 3})
 
 # trip time: (number_of_points - 1) * 15 seconds
 def trip_time(geom):
@@ -116,6 +116,7 @@ def start_in_area_time(row):
 df['SECONDS_TO_ADD'] = df.apply(start_in_area_time, axis=1)
 # adding second number to original start time
 df['TIMESTAMP'] = df['TIMESTAMP'] + df['SECONDS_TO_ADD']
+df.drop(columns=['SECONDS_TO_ADD','original_geometry'], inplace=True)
 df['DATETIME'] = pd.to_datetime(df['TIMESTAMP'], unit='s')
 
 #create columns: DAY, MONTH, YEAR, HOUR
@@ -128,7 +129,7 @@ df['SECOND'] = df['DATETIME'].dt.second
 
 # WEEKDAY (1-7, where monday is 1,... sunday is 7)
 df['WEEKDAY'] = df['DATETIME'].dt.weekday + 1
-
+df.drop(columns=['DATETIME'], inplace=True)
 #classification  PARTDAY (1 - morning, 2 - midday, 3 - afternoon, 4 - evening, 5 - night)
 def get_partday(hour):
     if 6 <= hour < 11:      return 1        # morning
@@ -157,24 +158,22 @@ start_points = gpd.GeoSeries.from_xy(df['START_LON'], df['START_LAT'], crs="EPSG
 end_points = gpd.GeoSeries.from_xy(df['END_LON'], df['END_LAT'], crs="EPSG:4326")
 df['OPTIMAL_DIST_KM'] = start_points.to_crs(epsg=3857).distance(end_points.to_crs(epsg=3857)) / 10**3
 df.to_crs(epsg=4326, inplace=True)
-
+df.drop(columns=['START_LON', 'START_LAT', 'END_LON', 'END_LAT'], inplace=True)
 # Deviation Ratio
 df['DEVIATION_RATIO'] = np.where(
     (df['OPTIMAL_DIST_KM'].notnull()) & (df['OPTIMAL_DIST_KM'] > 0),
     df['DIST_KM_IN_AREA'] / df['OPTIMAL_DIST_KM'],
     1.0
 )
-
+df.drop(columns=['OPTIMAL_DIST_KM'], inplace=True)
 df['SPEED'] = np.where(df['TIME_IN_AREA'] > 0, df['DIST_KM_IN_AREA'] / (df['TIME_IN_AREA'] / 60), np.nan)
 # check   
 print("Finished")
 print("Data snippet")
-print(df[['TRIP_ID', 'YEAR', 'MONTH', 'DAY', 'HOUR', 
+print(df[['YEAR', 'MONTH', 'DAY', 'HOUR', 
           'MINUTE', 'SECOND', 'PARTDAY', 'TIME_IN_AREA']].head())
-print(df[['TRIP_ID', 'DIST_KM_IN_AREA', 'DEVIATION_RATIO',
-           'OPTIMAL_DIST_KM', 'geometry']].head())
-print(df[['TRIP_ID', 'START_LON', 'START_LAT', 'END_LON',
-           'END_LAT','SPEED','SECONDS_TO_ADD']].head())
+print(df[['DIST_KM_IN_AREA', 'DEVIATION_RATIO', 'geometry']].head())
+print(df[['SPEED']].head())
 
 df_norm = df[['TRIP_ID', 'YEAR', 'MONTH', 'DAY', 
                     'HOUR', 'MINUTE', 'SECOND', 'WEEKDAY',
