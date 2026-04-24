@@ -11,9 +11,9 @@ import folium
 taxi_10k = pd.read_parquet('data/data_samples/data_10k_raw.parquet')
 taxi_100k = pd.read_parquet('data/data_samples/data_100k_raw.parquet')
 porto_gdf = ox.geocode_to_gdf("Porto, Portugal")
-weather_data = pd.read_parquet('data/raw/weather/hourly_weather.parquet')
-taxi_10k_proc = pd.read_parquet('data/data_samples/taxi_10k_prepared.parquet')
-test_data = gpd.read_file('data/data_samples/taxi_10k_prepared.geojson')
+weather_data = pd.read_parquet('data/processed/weather.parquet')
+taxi_10k_proc = pd.read_parquet('data/processed/taxi_prepared.parquet')
+#test_data = gpd.read_file('data/data_samples/taxi_10k_prepared.geojson')
 
 # print(taxi_10k.head())
 # print(taxi_100k.head())
@@ -251,3 +251,8 @@ i double chcecked for different df if there are differences but apart from mappi
 # PT 2
 #visualizing(test_data, porto_gdf)
 #areas_chopped_visu()
+
+#taxi_porto = gpd.GeoDataFrame(taxi_10k, geometry=taxi_10k['POLYLINE'].apply(creating_geometry))
+#taxi_porto = taxi_porto.set_crs("EPSG:4326")
+#taxi_porto = gpd.sjoin(taxi_porto, porto_gdf, predicate='within')
+#print(taxi_porto.describe())
