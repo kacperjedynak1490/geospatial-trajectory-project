@@ -1,5 +1,5 @@
 outs:
-- md5: b53e81cb3e7dfc7cca9b60b5256ea613
-  size: 96711454
+- md5: 31e32aad157c19abc3f40b8a576746c4
+  size: 736987721
   hash: md5
   path: taxi_prepared.parquet

@@ -38,6 +38,7 @@ else:
 
 print("Loading data...")
 df = pd.read_parquet(file_path)
+df = df.iloc[:1000000]
 df.drop(columns=['CALL_TYPE', 'ORIGIN_CALL', 'ORIGIN_STAND', 'TAXI_ID'], inplace=True) 
 geo_taxi = gpd.GeoDataFrame(df, geometry=df['POLYLINE'].apply(creating_geometry), crs='EPSG:4326')
 df.drop(columns=['POLYLINE'], inplace=True)
