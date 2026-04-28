@@ -15,3 +15,4 @@ xgboost
 scikit-learn
 shap
 matplotlib
+holidays

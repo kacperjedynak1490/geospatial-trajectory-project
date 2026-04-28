@@ -1,7 +1,7 @@
 '''
 This file contains the code for training the traffic prediction model. 
-I decided to use the XGBoost library, specifically the XGBClassifier, which performs exceptionally well on this type of tabular data.
-Because we are dealing with time-series data, I use TimeSeriesSplit for cross-validation (if tuning).
+I decided to use the XGBoost library, specifically the XGBClassifier, which performs exceptionally well on tabular data.
+Because we are dealing with time-series data, I use TimeSeriesSplit for cross-validation during hyperparameter tuning.
 I added two additional features (lag features) to the training set: JAM_LEVEL_1H_AGO and JAM_LEVEL_1D_AGO.
 Instead of using shift(), which shifts by rows and ignores spatial/temporal gaps, I implemented a robust self-merge using 'timestamp' and 'AREA_ID'.
 
@@ -18,24 +18,26 @@ Steps:
 4. Add target variable JAM_LEVEL (4 classes based on DEVIATION_RATIO).
 5. Calculate historical JAM_LEVEL (1 hour ago, 1 day ago) via self-merge.
 6. Drop unnecessary columns before training.
-7. Split data into X and y.
-8. Define custom class weights to handle severe class imbalance.
-9. Train the XGBoost model with optimized parameters for 4-class classification.
+7. Define custom class weights to handle class imbalance.
+8. Use RandomizedSearchCV on a subset (500k rows) to find the best parameters for 4 classes.
+9. Train the best XGBoost model on the full training dataset.
 10. Evaluate the model and save it to a .pkl file.
 '''
 
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-from sklearn.model_selection import TimeSeriesSplit
+from sklearn.model_selection import RandomizedSearchCV, TimeSeriesSplit
 from sklearn.metrics import confusion_matrix, classification_report
 import joblib
-import matplotlib.pyplot as plt
+
+# --- CONFIGURATION ---
+SEARCHING_BEST = 1  # Set to 1 to run RandomizedSearchCV, set to 0 to use predefined best parameters
 
 try:
     # Load data
     print("Loading data...")
-    taxi = pd.read_parquet('data/data_samples/taxi_100k_prepared.parquet')
+    taxi = pd.read_parquet('data/data_samples/taxi_100k_prepared.parquet') # Make sure this points to your full dataset now
     weather = pd.read_parquet('data/processed/weather.parquet')
     traffic = pd.read_parquet('data/processed/traffic.parquet')
     area = pd.read_parquet('data/processed/area.parquet')
@@ -53,7 +55,7 @@ data = data.merge(area, on='AREA_ID', how='left')
 data['AREA_ID'] = data['AREA_ID'].astype('category')
 data.sort_values(by=['YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND'], inplace=True)
 
-print("Preparing target variable and lag features for 4-class classification...")
+print("Preparing target variable and lag features for multi-classification (4 Classes)...")
 
 # --- TARGET VARIABLE CREATION (4 CLASSES) ---
 conditions = [
@@ -66,33 +68,27 @@ choices = [0, 1, 2, 3]
 data['JAM_LEVEL'] = np.select(conditions, choices, default=0)
 
 # --- FEATURE ENGINEERING: HISTORICAL LAGS ---
-# 1. Create a helper DataFrame with historical data (median jam level per area per hour)
 history = data.groupby(['YEAR', 'MONTH', 'DAY', 'HOUR', 'AREA_ID'])['JAM_LEVEL'].agg('median').reset_index()
-
-# 2. Create a clean timestamp column for accurate time shifting
 history['timestamp'] = pd.to_datetime(history[['YEAR', 'MONTH', 'DAY', 'HOUR']].assign(minute=0))
 
-# 3. Prepare feature: 1 HOUR AGO
 history_1h = history[['AREA_ID', 'timestamp', 'JAM_LEVEL']].copy()
-history_1h['timestamp'] = history_1h['timestamp'] + pd.Timedelta(hours=1) # Shift time FORWARD to match future rows
+history_1h['timestamp'] = history_1h['timestamp'] + pd.Timedelta(hours=1)
 history_1h.rename(columns={'JAM_LEVEL': 'JAM_LEVEL_1H_AGO'}, inplace=True)
 
-# 4. Prepare feature: 1 DAY AGO
 history_1d = history[['AREA_ID', 'timestamp', 'JAM_LEVEL']].copy()
-history_1d['timestamp'] = history_1d['timestamp'] + pd.Timedelta(days=1) 
+history_1d['timestamp'] = history_1d['timestamp'] + pd.Timedelta(days=1)
 history_1d.rename(columns={'JAM_LEVEL': 'JAM_LEVEL_1D_AGO'}, inplace=True)
 
-# 5. Merge historical features back into the main dataset
 data['timestamp'] = pd.to_datetime(data[['YEAR', 'MONTH', 'DAY', 'HOUR']].assign(minute=0))
 data = data.merge(history_1h, on=['AREA_ID', 'timestamp'], how='left')
 data = data.merge(history_1d, on=['AREA_ID', 'timestamp'], how='left')
 
-# 6. Crucial XGBoost step: Leave NaNs as floats (do NOT fill with 0) so the model learns from missing data
+# Crucial XGBoost step: Leave NaNs as floats
 data['JAM_LEVEL_1H_AGO'] = data['JAM_LEVEL_1H_AGO'].astype(float)
 data['JAM_LEVEL_1D_AGO'] = data['JAM_LEVEL_1D_AGO'].astype(float)
 
 # --- DATA SPLITTING ---
-print("Splitting data...")
+print("Splitting data into features and target...")
 cols_to_drop = [
     'TRIP_ID', 'POLYLINE', 'TIMEZONE', 'DEVIATION_RATIO', 
     'geometry', 'POLYGON', 'TIME_IN_AREA', 'DIST_KM_IN_AREA', 
@@ -104,48 +100,99 @@ y = data['JAM_LEVEL']
 
 # Chronological split (80% train, 20% test)
 split_idx = int(len(data) * 0.8)
-X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
-y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
+X_train_full, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
+y_train_full, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
 
-# --- MODEL TRAINING ---
-# Custom weights (stepped) to handle imbalance without making the model panic
-custom_weights = {
-    0: 1.0,   # Free flow (baseline)
-    1: 1.5,   # Slowdown
-    2: 3.5,   # Traffic Jam
-    3: 7.0    # Severe Jam 
-}
-sample_weights = y_train.map(custom_weights)
+# Custom stepped weights to guide the model safely through imbalance
+custom_weights = {0: 1.0, 1: 1.5, 2: 3.5, 3: 7.0}
+sample_weights_full = y_train_full.map(custom_weights)
 
-# Parameters tailored for 4-class classification to prevent overfitting
-final_params = {
-    'max_depth': 7,              # Shallower trees to generalize better
-    'min_child_weight': 10,      # Higher threshold of evidence required for leaves
-    'gamma': 1.0,                # Prunes branches that don't improve the loss
-    'n_estimators': 500,
-    'learning_rate': 0.01,
-    'subsample': 0.6,
-    'colsample_bytree': 0.6,
-    'objective': 'multi:softprob',
-    'num_class': 4               
-}
+# --- MODEL TRAINING & TUNING ---
+if SEARCHING_BEST == 1:
+    print("\n🔍 Searching for best parameters for 4-class model...")
+    
+    # TRICK: To prevent the search from taking days on millions of rows, 
+    # we take a subset (the latest 500k rows) of the training data for tuning.
+    tune_sample_size = min(500000, len(X_train_full))
+    X_tune = X_train_full.iloc[-tune_sample_size:]
+    y_tune = y_train_full.iloc[-tune_sample_size:]
+    weights_tune = y_tune.map(custom_weights)
+    
+    tscv = TimeSeriesSplit(n_splits=3, gap=2)
+    
+    xgb_base = xgb.XGBClassifier(
+        objective='multi:softprob',
+        num_class=4,
+        eval_metric="mlogloss",
+        tree_method="hist",
+        enable_categorical=True,
+        random_state=60,
+        n_jobs=-1
+    )
 
-final_model_heatmap = xgb.XGBClassifier(
-    **final_params,
-    eval_metric="mlogloss",
-    random_state=60,
-    enable_categorical=True,
-    tree_method="hist",
-    n_jobs=-1
-)
+    param_dist = {
+        'n_estimators': [300, 500, 800],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'max_depth': [5, 7, 9],
+        'min_child_weight': [5, 10, 20],
+        'subsample': [0.6, 0.8, 1.0],
+        'colsample_bytree': [0.6, 0.8, 1.0],
+        'gamma': [0.5, 1.0, 2.0]
+    }
 
-print("Fitting the final model with custom class weights...")
-final_model_heatmap.fit(X_train, y_train, sample_weight=sample_weights)
+    random_search = RandomizedSearchCV(
+        estimator=xgb_base,
+        param_distributions=param_dist,
+        n_iter=10,          # Number of random combinations to try
+        scoring='f1_macro', # Focuses on minority classes (traffic jams)
+        cv=tscv,
+        n_jobs=1,           # XGBoost uses all cores natively, keep n_jobs=1 for the search loop
+        verbose=2
+    )
 
-print("Saving the model...")
+    print(f"Starting RandomizedSearchCV on {tune_sample_size} rows...")
+    random_search.fit(X_tune, y_tune, sample_weight=weights_tune)
+
+    print("\n🏆 BEST PARAMETERS FOUND:")
+    print(random_search.best_params_)
+    
+    best_model = random_search.best_estimator_
+    
+    print("\n⚙️ Training the best model on the FULL training set...")
+    best_model.fit(X_train_full, y_train_full, sample_weight=sample_weights_full)
+    final_model_heatmap = best_model
+
+else:
+    print("\n🚀 Using predefined best parameters...")
+    # Once you find the best params from the search, paste them here and set SEARCHING_BEST = 0
+    final_params = {
+        'max_depth': 7,
+        'min_child_weight': 10,
+        'gamma': 1.0,
+        'n_estimators': 500,
+        'learning_rate': 0.01,
+        'subsample': 0.6,
+        'colsample_bytree': 0.6,
+        'objective': 'multi:softprob',
+        'num_class': 4
+    }
+    
+    final_model_heatmap = xgb.XGBClassifier(
+        **final_params, 
+        eval_metric="mlogloss", 
+        random_state=60, 
+        enable_categorical=True, 
+        tree_method="hist", 
+        n_jobs=-1
+    )
+    
+    print("Fitting the final model on the full training set...")
+    final_model_heatmap.fit(X_train_full, y_train_full, sample_weight=sample_weights_full)
+
+# --- SAVING & EVALUATION ---
+print("\nSaving the model...")
 joblib.dump(final_model_heatmap, 'data/processed/xgboost_traffic_model_heatmap.pkl')
 
-# --- EVALUATION ---
 print("\n--- MODEL EVALUATION ---")
 y_pred = final_model_heatmap.predict(X_test)
 
