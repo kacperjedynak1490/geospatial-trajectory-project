@@ -79,6 +79,11 @@ def get_weather_forecast():
     hourly_dataframe['time'] = hourly_dataframe['time'].dt.tz_convert('Europe/Lisbon').dt.tz_localize(None)
     return hourly_dataframe
 
+# load historical lag data
+@st.cache_data
+def load_lag_history():
+    return pd.read_parquet('data/processed/lag_history.parquet')
+
 # helper function for part of day classification
 def get_partday(hour):
     if 6 <= hour < 11:      return 1        # morning
@@ -92,6 +97,7 @@ try:
     model = load_model()
     static_df, trained_categories = load_static_data() 
     weather_df = get_weather_forecast()
+    lag_history = load_lag_history()
 except Exception as e:
     st.error(f"Data loading error: {e}")
     st.stop()
@@ -161,9 +167,29 @@ else:
     for col in ["PRECIPITATION", "WIND_GUSTS_10M", "IS_DAY", "WEATHER_CODE", "TEMPERATURE_2M"]:
         predict_df[col] = 0.0
 
-# lag features (defaulted to 0 due to lack of live data)
-predict_df['JAM_LEVEL_1H_AGO'] = 0.0
-predict_df['JAM_LEVEL_1D_AGO'] = 0.0
+# --- HISTORICAL LAG FEATURES ---
+# calculate time coordinates for 1 hour ago
+hour_1h_ago = (selected_hour - 1) % 24
+weekday_1h_ago = selected_date.weekday() if selected_hour > 0 else (selected_date.weekday() - 1) % 7
+
+# calculate time coordinates for 1 day ago
+hour_1d_ago = selected_hour
+weekday_1d_ago = (selected_date.weekday() - 1) % 7
+
+# extract historical slices
+hist_1h = lag_history[(lag_history['WEEKDAY'] == weekday_1h_ago) & (lag_history['HOUR'] == hour_1h_ago)][['AREA_ID', 'JAM_LEVEL']]
+hist_1d = lag_history[(lag_history['WEEKDAY'] == weekday_1d_ago) & (lag_history['HOUR'] == hour_1d_ago)][['AREA_ID', 'JAM_LEVEL']]
+
+# merge into main dataframe
+predict_df = pd.merge(predict_df, hist_1h, on='AREA_ID', how='left')
+predict_df.rename(columns={'JAM_LEVEL': 'JAM_LEVEL_1H_AGO'}, inplace=True)
+
+predict_df = pd.merge(predict_df, hist_1d, on='AREA_ID', how='left')
+predict_df.rename(columns={'JAM_LEVEL': 'JAM_LEVEL_1D_AGO'}, inplace=True)
+
+# fill missing history with 0.0 (free flow assumption)
+predict_df['JAM_LEVEL_1H_AGO'] = predict_df['JAM_LEVEL_1H_AGO'].fillna(0.0)
+predict_df['JAM_LEVEL_1D_AGO'] = predict_df['JAM_LEVEL_1D_AGO'].fillna(0.0)
 
 # align categorical area_id with model
 predict_df['AREA_ID'] = pd.Categorical(predict_df['AREA_ID'], categories=trained_categories)
