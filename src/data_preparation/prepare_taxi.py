@@ -18,7 +18,12 @@ import pandas as pd
 import json
 import math
 import numpy as np
-
+import geopandas as gpd
+from shapely.geometry import Point, LineString
+import shapely.wkt
+from src.visualisation.data_visualisation import creating_geometry
+import osmnx as ox
+ 
 #data
 
 # --- CONFIGURATION -------------------

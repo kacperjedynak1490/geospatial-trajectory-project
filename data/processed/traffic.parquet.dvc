@@ -1,0 +1,5 @@
+outs:
+- md5: 7e733b9f755972b43e5cce873002e685
+  size: 9782
+  hash: md5
+  path: traffic.parquet
