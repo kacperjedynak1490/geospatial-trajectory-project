@@ -16,3 +16,6 @@ scikit-learn
 shap
 matplotlib
 holidays
+streamlit
+pydeck
+joblib
